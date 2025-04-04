@@ -109,6 +109,7 @@ class AlphaVantageClient:
 
 # Module-level client instance
 _client: Optional[AlphaVantageClient] = None
+_client_api_key: Optional[str] = None
 
 def _get_client(api_key: Optional[str] = None) -> AlphaVantageClient:
     """
@@ -120,66 +121,72 @@ def _get_client(api_key: Optional[str] = None) -> AlphaVantageClient:
     Returns:
         AlphaVantageClient instance.
     """
-    global _client
-    if _client is None or (api_key and api_key != _client.api_key):
+    global _client, _client_api_key
+    
+    # If api_key has changed or client doesn't exist, create a new one
+    if _client is None or (api_key is not None and api_key != _client_api_key):
         _client = AlphaVantageClient(api_key)
+        _client_api_key = api_key
+    
     return _client
 
 
-def lookup(symbol: str, date: Union[str, datetime], api_key: Optional[str] = None) -> Dict[str, Any]:
+def lookup(symbol: str, date: str, api_key: Optional[str] = None) -> Dict[str, Any]:
     """
     Look up stock data for a specific symbol and date.
     
     Args:
-        symbol: The stock symbol to look up. For international stocks, use the appropriate suffix
-               (e.g., 'TSCO.LON' for London Stock Exchange, 'SHOP.TRT' for Toronto Stock Exchange).
-        date: The date to look up data for. Can be a string in 'YYYY-MM-DD' format or a datetime object.
-        api_key: Optional Alpha Vantage API key.
+        symbol: Stock symbol to look up.
+        date: Date to look up in format 'YYYY-MM-DD'.
+        api_key: Optional API key to use.
         
     Returns:
-        Dictionary containing open, high, low, close, and volume for the specified date.
+        Dictionary with stock data.
         
     Raises:
-        ValueError: If the data for the specified date is not available.
+        ValueError: If the symbol or date is invalid.
     """
     client = _get_client(api_key)
     
-    # Convert date to string format if it's a datetime object
-    if isinstance(date, datetime):
-        date_str = date.strftime("%Y-%m-%d")
-    else:
-        date_str = date
+    # Convert date string to datetime
+    try:
+        date_obj = datetime.strptime(date, "%Y-%m-%d")
+        date_str = date_obj.strftime("%Y-%m-%d")
+    except ValueError:
+        raise ValueError(f"Invalid date format: {date}. Use YYYY-MM-DD.")
     
-    # Use compact by default for efficiency, but if the date is old, we might need full data
-    # Start with compact (last 100 days) to minimize API usage
+    # First try with compact data (most recent 100 data points)
     outputsize = "compact"
+    df = client.get_daily_time_series(symbol, outputsize=outputsize)
     
-    # Fetch the time series data
-    try:
+    # Convert index to string format for comparison
+    df_dates = df.index.strftime('%Y-%m-%d').tolist()
+    
+    # If the date is not in the compact data, try with full data
+    if date_str not in df_dates:
+        logging.getLogger(__name__).info(f"Date {date_str} not found in compact data, trying full dataset")
+        outputsize = "full"
         df = client.get_daily_time_series(symbol, outputsize=outputsize)
-        
-        # If the date is not in the compact dataset, try with full dataset
-        if date_str not in df.index.astype(str):
-            logger.info(f"Date {date_str} not found in compact data, trying full dataset")
-            outputsize = "full"
-            df = client.get_daily_time_series(symbol, outputsize=outputsize)
-    except Exception as e:
-        raise Exception(f"Error fetching data for {symbol}: {str(e)}")
+        df_dates = df.index.strftime('%Y-%m-%d').tolist()
     
-    # Look up the specified date
-    try:
-        date_data = df.loc[date_str]
-        return {
-            "symbol": symbol.upper(),
-            "date": date_str,
-            "open": float(date_data["open"]),
-            "high": float(date_data["high"]),
-            "low": float(date_data["low"]),
-            "close": float(date_data["close"]),
-            "volume": int(date_data["volume"])
-        }
-    except KeyError:
+    # Check if the date exists in the data
+    if date_str not in df_dates:
         raise ValueError(f"No data available for {symbol} on {date_str}")
+    
+    # Get the data for the requested date
+    date_idx = df.index[df_dates.index(date_str)]
+    date_data = df.loc[date_idx]
+    
+    # Return the data as a dictionary
+    return {
+        "symbol": symbol,
+        "date": date_str,
+        "open": float(date_data["open"].iloc[0]) if hasattr(date_data["open"], "iloc") else float(date_data["open"]),
+        "high": float(date_data["high"].iloc[0]) if hasattr(date_data["high"], "iloc") else float(date_data["high"]),
+        "low": float(date_data["low"].iloc[0]) if hasattr(date_data["low"], "iloc") else float(date_data["low"]),
+        "close": float(date_data["close"].iloc[0]) if hasattr(date_data["close"], "iloc") else float(date_data["close"]),
+        "volume": int(date_data["volume"].iloc[0]) if hasattr(date_data["volume"], "iloc") else int(date_data["volume"])
+    }
 
 
 def get_min(symbol: str, n: int, api_key: Optional[str] = None) -> Dict[str, Any]:
