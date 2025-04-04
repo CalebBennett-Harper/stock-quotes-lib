@@ -6,11 +6,11 @@ import os
 from stock_quotes_lib import lookup, get_min, get_max
 from datetime import datetime, timedelta
 
-# Set your Alpha Vantage API key here or as an environment variable
-# os.environ["ALPHA_VANTAGE_API_KEY"] = "XGRJ6U7YQAMVWWKC"
+# Set your Alpha Vantage API key as an environment variable
+# os.environ["ALPHA_VANTAGE_API_KEY"] = "YOUR_API_KEY_HERE"
 
-# If you haven't set the environment variable, you can pass the API key directly
-API_KEY = "XGRJ6U7YQAMVWWKC"  # Alpha Vantage API key
+# Or use it directly (not recommended for production code)
+API_KEY = "YOUR_API_KEY_HERE"  # Alpha Vantage API key
 
 # Use a known trading day instead of calculating a recent date
 # Markets are closed on weekends and holidays, so using a specific known trading day
