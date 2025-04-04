@@ -76,7 +76,7 @@ If designed as a service rather than a library:
 
 ### Time Spent on the Exercise
 
-Approximately 3-4 hours were spent on this exercise, including:
+Approximately 1-2 hours were spent on this exercise, including:
 - Initial library design and implementation
 - Adding features like caching and international symbol support
 - Debugging API key and date handling issues
